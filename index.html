@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Eat Lowbrow Store Operations Portal</title>
+    <!-- Include Bootstrap CSS from a CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+  </head>
+  <body>
+    <!-- Navigation menu -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <a class="navbar-brand ms-4" href="#">Store Operations Portal</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link" href="#" id="expensesLink">Expenses</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Sales</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Discounts</a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+      
+      <!-- Content for Expenses -->
+      <div id="expensesContent" style="display:none;">
+        <!-- Insert your second HTML script here -->
+      
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Lowbrow Expenses Portal</title>
+            <!-- For Bootstrap-->
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+            
+            <!-- CSS For Print Format -->
+            <link rel="stylesheet" media="print" href="invoiceprint.css">
+            
+            <!-- CSS For Invoice -->
+            <link rel="stylesheet"  href="invoice.css">
+        
+            <!-- jQuery CDN -->
+            <script src="https://code.jquery.com/jquery-3.6.2.slim.js" integrity="sha256-OflJKW8Z8amEUuCaflBZJ4GOg4+JnNh9JdVfoV+6biw=" crossorigin="anonymous"></script>
+            
+            <!-- For Invoice  -->
+            <script src="invoice.js"></script>
+        
+            <script>
+        // Initialize the row number counter globally, starting from 0
+        // Initialize the row number counter globally, starting from 0
+        let rowCounter = 0;
+        let isVatExclusive = false; // Variable to track whether VAT is exclusive or not
+        
+        // This function adds a new row when the "Add" button is clicked
+        function BtnAdd() {
+            // Get the table body (TBody)
+            var tableBody = document.getElementById("TBody");
+        
+            // Increment the rowCounter before adding a new row (ensure numbering starts from 1)
+            rowCounter++;
+        
+            // Clone the existing row template (hidden one)
+            var newRow = document.getElementById("TRow").cloneNode(true);
+        
+            // Remove the hidden class to make the new row visible
+            newRow.classList.remove("d-none");
+        
+            // Update the row number
+            newRow.getElementsByTagName("th")[0].textContent = rowCounter;
+        
+            // Clear the values in the input fields for the new row
+            newRow.querySelector('input[name="qty"]').value = "";
+            newRow.querySelector('input[name="rate"]').value = "";
+            newRow.querySelector('input[name="amt"]').value = "0";
+        
+            // Clear the dropdown selections for VAT Type and EWT
+            newRow.querySelector('select[name="vatType"]').value = "";
+            newRow.querySelector('select[name="ewt"]').value = "0%";
+        
+            // Add event listeners to recalculate the row and totals when the user changes qty/rate
+            newRow.querySelector('input[name="qty"]').addEventListener('input', function () { Calc(this); });
+            newRow.querySelector('input[name="rate"]').addEventListener('input', function () { Calc(this); });
+        
+            // Add event listener to recalculate the amount when VAT Type is changed
+            newRow.querySelector('select[name="vatType"]').addEventListener('change', function () { Calc(this); });
+        
+            // Add event listener for EWT dropdown
+            newRow.querySelector('select[name="ewt"]').addEventListener('change', function() {
+                calculateRowEWT(this.parentElement.parentElement);
+                GetTotal();
+            });
+        
+            // Add event listener to recalculate total when amount changes
+            newRow.querySelector('input[name="amt"]').addEventListener('input', function () { GetTotal(); });
+        
+            // Append the new row to the table body
+            tableBody.appendChild(newRow);
+        
+            // Recalculate row numbers after adding the new row
+            RecalculateRowNumbers();
+        }
+        
+        // This function deletes a row when the "Delete" button is clicked
+        function BtnDel(button) {
+            // Find the row to delete
+            var row = button.parentElement.parentElement;
+            row.remove();
+        
+            // Recalculate row numbers after deletion
+            RecalculateRowNumbers();
+        }
+        
+        // Recalculate row numbers
+        function RecalculateRowNumbers() {
+            var rows = document.getElementById("TBody").getElementsByTagName("tr");
+        
+            // Reset rowCounter based on the current number of rows
+            rowCounter = rows.length;
+        
+            // Loop through each row and update the row number starting from 1
+            for (let i = 0; i < rows.length; i++) {
+                rows[i].getElementsByTagName("th")[0].textContent = i + 0; // Row numbers start from 1
+            }
+        
+            // Recalculate totals after row removal
+            GetTotal();
+        }
+        
+        // Calculate EWT for a single row
+        function calculateRowEWT(row) {
+            var amt = parseFloat(row.querySelector('input[name="amt"]').value) || 0;
+            var vatType = row.querySelector('select[name="vatType"]').value;
+            var ewtPercentageStr = row.querySelector('select[name="ewt"]').value;
+            var ewtPercentage = parseFloat(ewtPercentageStr.replace('%', '')) / 100;
+            
+            var ewtAmount = 0;
+            
+            if (vatType === "V") {
+                // For VAT transactions: Amount / 1.12 * EWT percentage
+                ewtAmount = (amt / 1.12) * ewtPercentage;
+            } else {
+                // For non-VAT transactions: Amount * EWT percentage
+                ewtAmount = amt * ewtPercentage;
+            }
+            
+            // Store the EWT amount in a data attribute for later use
+            row.setAttribute('data-ewt-amount', ewtAmount.toFixed(2));
+        }
+        
+        // Calculate the amount for each row when quantity, rate or VAT Type is changed
+        function Calc(input) {
+            var row = input.parentElement.parentElement;
+            var qty = parseFloat(row.querySelector('input[name="qty"]').value) || 0;
+            var rate = parseFloat(row.querySelector('input[name="rate"]').value) || 0;
+        
+            // Check if the "Vat Exclusive" toggle is activated
+            var isVatExclusive = document.getElementById('vatExclusiveToggle').checked;
+        
+            var amt = qty * rate;
+        
+            // If VAT Exclusive is enabled, apply VAT (1.12 multiplier) based on "VAT Type"
+            if (isVatExclusive) {
+                var vatType = row.querySelector('select[name="vatType"]').value;
+                if (vatType === "V") {
+                    amt = amt * 1.12;
+                }
+            }
+        
+            row.querySelector('input[name="amt"]').value = amt.toFixed(2); // Update the calculated amount
+        
+            // Calculate EWT for this row
+            calculateRowEWT(row);
+        
+            // Recalculate the total when amount changes
+            GetTotal();
+        }
+        
+        // Updated GetTotal function to include EWT calculations
+        function GetTotal() {
+            var total = 0;
+            var totalVatExclusive = 0;
+            var totalVatExclusiveWithoutVat = 0;
+            var totalEWT = 0;
+        
+            var rows = document.getElementById("TBody").getElementsByTagName("tr");
+        
+            // Loop through each row
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                var amt = parseFloat(row.querySelector('input[name="amt"]').value) || 0;
+                var vatType = row.querySelector('select[name="vatType"]').value;
+                
+                total += amt;
+                
+                if (vatType === "V") {
+                    totalVatExclusive += amt;
+                    totalVatExclusiveWithoutVat += amt / 1.12;
+                }
+        
+                // Calculate EWT for this row and add to total EWT
+                calculateRowEWT(row);
+                totalEWT += parseFloat(row.getAttribute('data-ewt-amount')) || 0;
+            }
+        
+            // Calculate the GST Amount
+            var gstAmount = (totalVatExclusive - (totalVatExclusive / 1.12));
+        
+            // Update all totals including EWT
+            document.getElementById("FTotal").value = total.toFixed(2);
+            document.getElementById("FGST").value = gstAmount.toFixed(2);
+            document.getElementById("FNet").value = (total - totalEWT).toFixed(2);
+            document.getElementById("FEWT").value = totalEWT.toFixed(2);
+        }
+        
+        // Toggle VAT Exclusive status
+        function toggleVatExclusive() {
+            isVatExclusive = document.getElementById('vatExclusiveToggle').checked;
+        
+            // Recalculate amounts for each row
+            var rows = document.getElementById("TBody").getElementsByTagName("tr");
+            for (let i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                var qty = parseFloat(row.querySelector('input[name="qty"]').value) || 0;
+                var rate = parseFloat(row.querySelector('input[name="rate"]').value) || 0;
+        
+                var amt = qty * rate;
+        
+                // If VAT Exclusive is enabled, apply VAT (1.12 multiplier)
+                if (isVatExclusive) {
+                    var vatType = row.querySelector('select[name="vatType"]').value;
+                    if (vatType === "V") {
+                        amt = amt * 1.12;
+                    }
+                }
+        
+                row.querySelector('input[name="amt"]').value = amt.toFixed(2); // Update the calculated amount
+            }
+        
+            // Recalculate total after VAT toggle change
+            GetTotal();
+        }
+        
+        // Add event listeners for EWT dropdown changes
+        function addEWTEventListeners() {
+            var rows = document.getElementById("TBody").getElementsByTagName("tr");
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                row.querySelector('select[name="ewt"]').addEventListener('change', function() {
+                    calculateRowEWT(this.parentElement.parentElement);
+                    GetTotal();
+                });
+            }
+        }
+        // This function initializes 10 rows when the page loads
+        function initializeRows() {
+            for (let i = 0; i < 5; i++) {
+                BtnAdd();
+            }
+        }
+        // Initialize the page
+        window.onload = function() {
+            initializeRows();
+            addEWTEventListeners();
+        };
+        
+        // Print function
+        function GetPrint() {
+            window.print();
+        }
+        
+        
+            </script>
+              
+          </head>
+          <body>
+         
+            <div class="container">
+        
+                <form method="post" action="https://script.google.com/macros/s/AKfycbyKYoZbf5HrqZ9K9LXNUzPnZNM0Sx-o0EEMGRa_iwa-srXX0BbqjzSPVEJSYQBL16wN/exec">
+        
+              <div class="card">
+                <div class="card-header text-center">
+                  <h4>EXPENSES PORTAL</h4>
+                </div>
+                <div class="card-body">
+                  <!-- Row for Store Name and DR No -->
+                  <div class="row">
+                    <div class="col-6">
+                      <!-- Store Name Dropdown (on the left side) -->
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">Store Name</span>
+                        <select class="form-control" id="storeName" name="storeName">
+                          <option value="Bad Bird Megamall">Bad Bird Megamall</option>
+                          <option value="Flowerboy Grid">Flowerboy Grid</option>
+                          <option value="Fowlbread">Fowlbread</option>
+                          <option value="TY Seafood">TY Seafood</option>
+                          <option value="Penguin Fresh">Penguin Fresh</option>
+                        </select>
+                      </div>
+                    </div>
+            
+                    <div class="col-6">
+                      <!-- DR No Input Box (on the right side) -->
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">DR No</span>
+                        <input type="text" class="form-control" placeholder="" name="DRno">
+                      </div>
+                    </div>
+                  </div>
+            
+                  <!-- Row for Supplier Name and DR Date -->
+                  <div class="row">
+                    <div class="col-6">
+                      <!-- Supplier Name Combo Box (on the left side) -->
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">Supplier Name</span>
+                        <input list="supplierList" class="form-control" placeholder="Select or type Supplier" name="SupplierName">
+                        <datalist id="supplierList">
+                          <!-- Predefined Supplier Options -->
+                          <option value="AAB Baking Goods & Supplies Inc">
+                          <option value="Abacus Book And Card Corp">
+                          <option value="Alta Comida">
+                          <option value="Andre Flos Gourmet">
+                          <option value="APT VENTURES INC">
+                          <option value="AUA Steel Fabrication Services">
+                          <option value="BADASS BEVERAGE BRANDS INC.">
+                          <option value="Beyond Concepts Inc">
+                          <option value="BGZ FOOD VENTURES, INC">
+                          <option value="BOARDWALK BUSINESS VENTURES INC">
+                          <option value="BOGIL ISLA  INC.">
+                          <option value="Can Coffee Corp">
+                          <option value="CANTERBURY - WINSLOW INTERNATIONAL PRODUCTS INC.">
+                          <option value="Chaoshan foods corp.">
+                          <option value="CHEMLUX INCORPORATED">
+                          <option value="CHRISTY'S SEAFOODS STALL">
+                          <option value="CITRA MANILA TOLLWAYS CORP.">
+                          <option value="CONSISTENT FROZEN SOLUTIONS CORP.">
+                          <option value="Converge ICT Solutions Inc.">
+                          <option value="COOKS EXCHANGE INC.">
+                          <option value="CTT Synergy Corporation">
+                          <option value="Cyfreeze Refrigeration and Airconditioning Services">
+                          <option value="D'FABRICFIELD INC">
+                          <option value="D&L SEAFOODS">
+                          <option value="DETPAK PACKAGING PHILIPPINES, INC">
+                          <option value="DIMENSION DISTRIBUTORS, INC.">
+                          <option value="Dream Air Engineering Services">
+                          <option value="DUEL OFFICE SUPPLIES AND PRINTERS CORP.">
+                          <option value="DUI - METRO MARKET MARKET">
+                          <option value="EDR Meat Dealer Inc">
+                          <option value="Brian Nicholas Sy">
+                          <option value="ENTRUSTED CORP.">
+                          <option value="ESTATEWINE INC.">
+                          <option value="EURO SWISS FOOD INC.">
+                          <option value="FAMILYHEALTH & BEAUTY CORP.">
+                          <option value="First Asia Realty Development">
+                          <option value="FOODFULL HOLDINGS CORP">
+                          <option value="FORT BONIFACIO DEVELOPMENT CORPORATION">
+                          <option value="FULL BASKET GENERAL MERCHANDISE">
+                          <option value="GA Printing Inc">
+                          <option value="Gil Trading"> 
+                          <option value="GoodMartPH">
+                          <option value="GRABFOOD">
+                          <option value="Grand Hacienda Wines Inc.">
+                          <option value="Healthy Options">
+                          <option value="HighTower, Inc">
+                          <option value="Jadd Zedric Packaging & General Merchandise">
+                          <option value="Jcab Seafoods">
+                          <option value="JOELS PLACE">
+                          <option value="JONATHAN D. CRUDO">
+                          <option value="JOYCE CARLA A. BERSABAL - PROP">
+                          <option value="Junmie Ramana Developers Inc.">
+                          <option value="Kareila Management Corp">
+                          <option value="KITCHEN & CARRY MERCHANDISING">
+                          <option value="Knowledge Lab Inc">
+                          <option value="KolourPro Digital Print Center">
+                          <option value="LANDMARK DEPARTMENT CORP.">
+                          <option value="LANGJINKLINKS INTL TRADE INC">
+                          <option value="Majestic Graphics & Printing">
+                          <option value="Marthas Trading Corp">
+                          <option value="MC HOME DEPOT">
+                          <option value="MERCURY DRUG-ROCKWELL CENTER MAKATI">
+                          <option value="METOLIUS VALLEY, INC">
+                          <option value="MIDA FOOD DISTRIBUTORS INC">
+                          <option value="MSCS PrimeGoods Inc">
+                          <option value="MUJI PHILIPPINES CORP.">
+                          <option value="NAPA GAPA Beverages Corp">
+                          <option value="Navotas Seafood">
+                          <option value="Nexpak Megasamsotite Inc.">
+                          <option value="NUJI PHILIPPINES CORP.">
+                          <option value="OFFICE WARE HOUSE, INC.- ROCKWELL BR09">
+                          <option value="OLM FN COMPANY">
+                          <option value="PansolFood Ventures Corp">
+                          <option value="Papercon">
+                          <option value="Penguin Fresh">
+                          <option value="PF Consumer">
+                          <option value="PHILIPPINE FOODSERVICE EQUIPMENT AND SUPPLIES CORPORATION">
+                          <option value="PIONEER CENTER, INC.">
+                          <option value="Polar Queen Waterways Inc">  
+                          <option value="POWER BOOKS, INC.">
+                          <option value="Premier Food Choice Intl Corp">
+                          <option value="Pro Possmei International Corp">
+                          <option value="PYC FOODS CORP.">
+                          <option value="RGE Agridev Corporation">
+                          <option value="ROBINSON'S SUPERMARKET CORP.">
+                          <option value="ROBINSON'S TRUE SERVE HARDWARE PHILS. INC.">
+                          <option value="ROCKWELL LAND CORPORATION">
+                          <option value="ROUIE CARL DELA CRUZ ISIDORO">
+                          <option value="RUBY'S WRAP SHOP">
+                          <option value="SANTIS DELI INC.">
+                          <option value="Scratch Bakery Inc">
+                          <option value="Shopee">   
+                          <option value="SMMAK TRADING CORPORATION">
+                          <option value="STC Agri Products Inc">
+                          <option value="The Husbuns">
+                          <option value="THE LANDMARK CORP.">
+                          <option value="THERMAL AIRCON SOLUTIONS CORP.">
+                          <option value="Ticsmeat Co">
+                          <option value="UNCLE BILLS LTD., INC.">
+                          <option value="VIOLETA MORALES ALI - PROP">
+                          <option value="WATSONS PERSONAL CARE STORES INC.">
+                          <option value="Wendy Mantis">
+                          <option value="WERDENBERG INTERNATIONAL CORP.">
+                          <option value="Whim Manila">
+                          <option value="WHK MFG. AND TRADING CORPORATION">
+                          <option value="WISHWELL CO.">
+                          <option value="Wisk Fine Foods Inc">
+                          <option value="ZAGATO CORP.">
+                        </datalist>
+                      </div>
+                    </div>
+            
+                    <div class="col-6">
+                      <!-- DR Date Input Box (on the right side) -->
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">DR Date</span>
+                        <input type="date" class="form-control" placeholder="" name="DRdate">
+                      </div>
+                    </div>
+                  </div>
+            
+                  <!-- Row for Disbursement Type and VAT Exclusive Toggle (on the same row) -->
+                  <div class="row">
+                    <div class="col-6">
+                      <!-- Disbursement Type Dropdown -->
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">Disbursement Type</span>
+                        <select class="form-control" id="disbursementType" name="disbursementType">
+                          <option value="Direct Supplier">Direct Supplier</option>
+                          <option value="Petty Cash">Petty Cash</option>
+                          <option value="Payroll">Payroll</option>
+                          <option value="Service Charge">Service Charge</option>
+                          <option value="Reimbursements">Reimbursements</option>
+                          <option value="Rent & Utilities">Rent & Utilities</option>
+                          <option value="Taxes & Licenses">Taxes & Licenses</option>
+                        </select>
+                      </div>
+                    </div>
+            
+                    <div class="col-4">
+                      <!-- VAT Exclusive Toggle Button (on the right side) -->
+                      <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="vatExclusiveToggle" onclick="toggleVatExclusive()">
+                        <label class="form-check-label" for="vatExclusiveToggle">VAT Exclusive</label>
+                      </div>
+                    </div>
+                  </div>
+        
+                  <style>
+        
+                    .expense-type-column {
+                      width: 180px; /* Adjust the width of VAT Type column */
+                    }
+        
+                    .vat-type-column {
+                      width: 130px; /* Adjust the width of VAT Type column */
+                    }
+                  
+                    .ewt-column {
+                      width: 110px; /* Adjust the width of EWT column */
+                    }
+                  
+                    .qty-column {
+                      width: 110px; /* Adjust the width of the Qty column */
+                    }
+                  </style>
+        <table class="table table-bordered">
+          <thead class="table-success">
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Particular</th>
+              <th scope="col" class="qty-column">Qty</th> <!-- Add custom class for width -->
+              <th scope="col">Price</th>
+              <th scope="col">Amount</th>
+              <th scope="col" class="expense-type-column">Expense Type</th>
+              <th scope="col" class="vat-type-column">VAT Type</th> <!-- Add custom class for width -->
+              <th scope="col" class="ewt-column">EWT</th> <!-- Add custom class for width -->
+              <th scope="col" class="NoPrint">
+                <button type="button" class="btn btn-sm btn-success" onclick="BtnAdd()">+</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="TBody">
+            <tr id="TRow" class="d-none">
+              <th scope="row">1</th>
+              <td>
+                <!-- Combo box with datalist for "Particular" -->
+                <input list="particular-options" class="form-control" name="particular" placeholder="Start typing...">
+                <datalist id="particular-options">
+                  <option value="Agar-agar powder">
+                    <option value="Alamang, dried">
+                    <option value="Aligue">
+                    <option value="All spice powder (McCormick)">
+                    <option value="Anchovy (Dona Elena), fillet">
+                    <option value="Anchovy (Molinera), fillet">
+                    <option value="Annatto (J&Y), powder">
+                    <option value="Annatto (Shakti baba), powder">
+                    <option value="Bacon (Aguila Country), raw">
+                    <option value="Bacon (Aguila Country), cooked">
+                    <option value="Bacon (Hormel), raw">
+                    <option value="Bacon (Hormel), cooked">
+                    <option value="Bagoong (Barrio Fiesta)">
+                    <option value="Baking powder (Queen)">
+                    <option value="Baking powder (Calumet)">
+                    <option value="Baking soda (Arm & hammer)">
+                    <option value="Banana, lakatan">
+                    <option value="Banana, lakatan, peeled">
+                    <option value="Banana, saba">
+                    <option value="Banana, saba, peeled">
+                    <option value="Banana, saba, peeled, pc">
+                    <option value="Basil">
+                    <option value="Basil, trimmed">
+                    <option value="Basil, trimmed, fried">
+                    <option value="Bay leaves">
+                    <option value="BBQ marinade (Mama Sita's)">
+                    <option value="Sate sauce (Bullhead)">
+                    <option value="Beancurd wrapper, whole">
+                    <option value="Beancurd wrapper, sliced 1/4">
+                    <option value="Beansprouts">
+                    <option value="Beef brisket">
+                    <option value="Beef brisket, trimmed">
+                    <option value="Beef chucks">
+                    <option value="Beef chucks, trimmed">
+                    <option value="Beef cubes (Knorr)">
+                    <option value="Beef shortplate (Excel), slab">
+                    <option value="Beef shortplate (Excel), slab, sliced">
+                    <option value="Beef shortplate (Excel), slab, trimmed">
+                    <option value="Beef top blade (Excel), slab">
+                    <option value="Beef stock (Capri)">
+                    <option value="Beef, fats">
+                    <option value="Beef (EDR), ground">
+                    <option value="Beef (OLM), ground">
+                    <option value="Beer (Engkanto), lager">
+                    <option value="Beer (Engkanto), ube lager">
+                    <option value="Beetroot">
+                    <option value="Bell pepper, red">
+                    <option value="Bell pepper, red, trimmed">
+                    <option value="Bell pepper, green">
+                    <option value="Bell pepper, green, trimmed">
+                    <option value="Biscoff (Lotus)">
+                    <option value="Black tea (Pro Possmei)">
+                    <option value="Bokchoy">
+                    <option value="Bokchoy, trimmed">
+                    <option value="Bonito (Yamato), flakes">
+                    <option value="Brandy (Tres Cepas)">
+                    <option value="Breadcrumbs (Kasugai)">
+                    <option value="Breadcrumbs (Kasugai), waste-adjusted">
+                    <option value="Breading mix, dry">
+                    <option value="Breading mix, dry, waste-adjusted">
+                    <option value="Breading mix, wet">
+                    <option value="Breading mix, wet, waste-adjusted">
+                    <option value="Burger bun (Thehusbun Inc)">
+                    <option value="Butter (Caeli Gourmet), unsalted">
+                    <option value="Butter (Lurpak), salted">
+                    <option value="Cabbage, green">
+                    <option value="Cabbage, green, trimmed">
+                    <option value="Cabbage, red">
+                    <option value="Cabbage, red, trimmed">
+                    <option value="Calamansi">
+                    <option value="Calamansi, juice">
+                    <option value="Calamansi (Pick & Squeeze), concentrate">
+                    <option value="Cali Apple">
+                    <option value="Capers (Capri)">
+                    <option value="Capers (Capri), drained">
+                    <option value="Capers (Capri), fried">
+                    <option value="Capsaicin sauce (KMG)">
+                    <option value="Carrots">
+                    <option value="Carrots, peeled">
+                    <option value="Carrots, shredded">
+                    <option value="Cauliflower">
+                    <option value="Cauliflower, trimmed">
+                    <option value="Celery">
+                    <option value="Celery, trimmed">
+                    <option value="Cheese (American Heritage), singles">
+                    <option value="Cheese (American Heritage), block">
+                    <option value="Cheese (Anchor), singles">
+                    <option value="Cheese (California), cheddar, block">
+                    <option value="Cheese (Chevital), quickmelt">
+                    <option value="Cheese (Danes), processed, block">
+                    <option value="Cheese (Galbani), grana padano">
+                    <option value="Cheese (Latteria Soresina), parmesan, block">
+                    <option value="Cheese (Latteria Soresina), parmesan, block, grated">
+                    <option value="Cheese (Stella), parmesan, block">
+                    <option value="Cheese, mozzarella, fresh">
+                    <option value="Cheese (Arla), mozzarella, block">
+                    <option value="Cheese (Arla), white apetina">
+                    <option value="Cheese (Indofine), romano, powder">
+                    <option value="Cheese (Pure and Fresh), ricotta">
+                    <option value="Chicken breast, fillet">
+                    <option value="Chicken breast, fillet, thawed">
+                    <option value="Chicken breast, fillet, poached">
+                    <option value="Chicken broth base (Knorr)">
+                    <option value="Chicken CLQ (AJC)">
+                    <option value="Chicken powder (Knorr)">
+                    <option value="Chicken cubes (Knorr)">
+                    <option value="Chicken skin, raw">
+                    <option value="Chicken, bones">
+                    <option value="Chicken, feet">
+                    <option value="Chicken, feet">
+                    <option value="Chicken thigh, boneless, skinless, trimmed">
+                    <option value="Chicken thigh (Seara), boneless, skin-on">
+                    <option value="Chicken thigh (Seara), boneless, skin-on, trimmed">
+                    <option value="Chickpea (Jolly), canned">
+                    <option value="Chickpea (Jolly), canned, drained">
+                    <option value="Chili powder (Restohub)">
+                    <option value="Chili, dried, local">
+                    <option value="Chili, labuyo">
+                    <option value="Chilli, green">
+                    <option value="Chilli garlic sauce (Lee Kum Kee)">
+                    <option value="Chives">
+                    <option value="Chives, trimmed">
+                    <option value="Chocolate (Beryl's), dark">
+                    <option value="Chorizo (Euro Swiss), local">
+                    <option value="Chorizo (Olmeda)">
+                    <option value="Chorizo (Molinera), spanish">
+                    <option value="Chorizo (Molinera), spanish, drained">
+                    <option value="Cilantro">
+                    <option value="Cilantro, trimmed, leaves">
+                    <option value="Cilantro, trimmed, stem">
+                    <option value="Cinnamon, bark">
+                    <option value="Cinnamon powder (Mccormick)">
+                    <option value="Liquid seasoning (Maggi), classic">
+                    <option value="Clams, white">
+                    <option value="Clams, white, boiled">
+                    <option value="Cobbler (MIda), fillet">
+                    <option value="Coconut cream (Kara)">
+                    <option value="Coconut flakes (Lets Do Organic)">
+                    <option value="Coconut milk (Kara)">
+                    <option value="Coconut water (Vita Coco)">
+                    <option value="Cold brew (Type A), concentrate">
+                    <option value="Coriander (Assad)">
+                    <option value="Corn (Jolly), canned, kernels">
+                    <option value="Corn (Jolly), canned, kernels, drained">
+                    <option value="Crab (Mida), soft shell">
+                    <option value="Crab and corn powder (Knorr)">
+                    <option value="Crab lump (Pier), jumbo">
+                    <option value="Crab lump (Pier), super">
+                    <option value="Crab lump (Saravia), jumbo">
+                    <option value="Crab lump (Saravia), super">
+                    <option value="Crab paste (Lorins)">
+                    <option value="Crab (Navotas), claws">
+                    <option value="Crab shell, local">
+                    <option value="Crab stick (Ocean)">
+                    <option value="Crackers (Sky Flakes)">
+                    <option value="Cream cheese (Emborg)">
+                    <option value="Cream of mushroom (Knorr)">
+                    <option value="Cucumber">
+                    <option value="Cucumber, trimmed">
+                    <option value="Cumin powder (Assad)">
+                    <option value="Curry mix (S&B Golden), flakes">
+                    <option value="Curry mix (S&B Golden), paste">
+                    <option value="Curry powder (UFC)">
+                    <option value="Citric acid (Dalkem)">
+                    <option value="Dill, fresh">
+                    <option value="Dirty rice mix">
+                    <option value="Dried scallops">
+                    <option value="Dulong, dried">
+                    <option value="Egg, medium">
+                    <option value="Egg, XL">
+                    <option value="Eggplant">
+                    <option value="Eggplant, trimmed">
+                    <option value="Eggplant, trimmed, cooked">
+                    <option value="Extract (McCormick), banana">
+                    <option value="Extract, vanilla">
+                    <option value="Fennel, fresh">
+                    <option value="Fish sauce (Tiparos)">
+                    <option value="Fish sauce (Datu Puti)">
+                    <option value="Five spice powder (J&Y)">
+                    <option value="Five spice powder (McCormick)">
+                    <option value="Flour (All About Baking), bread">
+                    <option value="Flour (Erawan), rice">
+                    <option value="Flour (Polar Bear), rice">
+                    <option value="Flour, all purpose">
+                    <option value="Flour, showa">
+                    <option value="Focaccia (Scratch), whole">
+                    <option value="Focaccia (Scratch), sliced 1/6">
+                    <option value="Focaccia (Scratch), sliced 1/10">
+                    <option value="Focaccia (Scratch), sliced 1/44">
+                    <option value="Focaccia (Scratch), crouton">
+                    <option value="Food coloring (McCormick), red">
+                    <option value="Fries (Mccain Ore-ida Country Style)">
+                    <option value="Fries (Mccain Ore-ida Country Style), cooked">
+                    <option value="Fries (Mccain Ore-ida Country Style), cooked, waste-adjusted">
+                    <option value="Fries (Simplot), crinkle">
+                    <option value="Fries (Simplot), crinkle, cooked">
+                    <option value="Galangal paste (Heritage)">
+                    <option value="Garlic">
+                    <option value="Garlic, peeled">
+                    <option value="Garlic, peeled, whole">
+                    <option value="Garlic, fried">
+                    <option value="Garlic, powder">
+                    <option value="Ginger">
+                    <option value="Ginger, trimmed">
+                    <option value="Gochujang, brown">
+                    <option value="Gochujang, green">
+                    <option value="Gochujang, red">
+                    <option value="Green beans">
+                    <option value="Green beans, trimmed">
+                    <option value="Hibe, dried">
+                    <option value="Ham (Santis), canadian">
+                    <option value="Ham (Santis), forrest">
+                    <option value="Ham, coppa">
+                    <option value="Hondashi (Ajinomoto)">
+                    <option value="Hondashi (Marumoto)">
+                    <option value="Honey (Capilano), pure">
+                    <option value="Honey citron tea (Ottoggi), concentrate">
+                    <option value="Horseradish">
+                    <option value="Hotdog bun (28 Derby)">
+                    <option value="Hot sauce (Frank's), original">
+                    <option value="Hush puppies mix">
+                    <option value="Ice">
+                    <option value="Jam (Tiptree), blueberry">
+                    <option value="Jamonilla ,less sodium (Tulip)">
+                    <option value="Jasmine tea (Pro Possmei)">
+                    <option value="Jerrycan container, natural, 4L">
+                    <option value="Juice (Harvey Fresh), apple">
+                    <option value="Juice (Minute Maid), orange">
+                    <option value="Juice (Sunquick), orange">
+                    <option value="Kang kong">
+                    <option value="Kang kong, trimmed">
+                    <option value="Ketchup (Heinz), tomato">
+                    <option value="Kimchi (Pogi)">
+                    <option value="King prawns">
+                    <option value="Kuchay">
+                    <option value="Lapu-lapu">
+                    <option value="Lapu-lapu, fillet (Andrei's)">
+                    <option value="Leeks, green">
+                    <option value="Leeks, white">
+                    <option value="Lemon">
+                    <option value="Lemon, sliced (1/8)">
+                    <option value="Lemon, sliced (3/4)">
+                    <option value="Lemon, juice">
+                    <option value="Lemongrass">
+                    <option value="Lemongrass, trimmed">
+                    <option value="Lemongrass powder (Restohub)">
+                    <option value="Lettuce, iceberg">
+                    <option value="Lettuce, iceberg, trimmed">
+                    <option value="Lettuce, romaine">
+                    <option value="Lettuce, romaine, trimmed">
+                    <option value="Lime">
+                    <option value="Lime, juice">
+                    <option value="Lime leaf (Kaffir)">
+                    <option value="Lime powder (Knorr)">
+                    <option value="Lobster (Mida), raw">
+                    <option value="Lobster (PYC), raw">
+                    <option value="Lychee (Jolly), canned">
+                    <option value="Lychee (Jolly), canned, drained">
+                    <option value="Macaroni (Del Monte)">
+                    <option value="Macaroni (Del Monte), elbow">
+                    <option value="Mango, green">
+                    <option value="Mango, green, trimmed">
+                    <option value="Mango, ripe">
+                    <option value="Mango, ripe, trimmed">
+                    <option value="Mayonnaise (Best Food)">
+                    <option value="Mayonnaise (Kewpie), japanese">
+                    <option value="Milk (Alaska), condensed">
+                    <option value="Milk (Angel), condensed">
+                    <option value="Milk (Emborg), full cream">
+                    <option value="Milk (Nestle), fresh">
+                    <option value="Milk (Oatside), oat">
+                    <option value="Milk (Sunkist), pistachio">
+                    <option value="Mint">
+                    <option value="Mint, trimmed">
+                    <option value="Ciabatta (Naked Bakery), mini">
+                    <option value="Mirin">
+                    <option value="Miso, paste (Hanamaruki)">
+                    <option value="Monggo, dried">
+                    <option value="MSG">
+                    <option value="Mushroom (Jolly), button, canned">
+                    <option value="Mushroom (Jolly), button, canned, drained">
+                    <option value="Mushroom (Golden Valley), canned">
+                    <option value="Mushroom (Golden Valley), canned, drained">
+                    <option value="Mushroom (Sunbest), straw">
+                    <option value="Mushroom (Sunbest), straw, drained">
+                    <option value="Mushroom, enoki">
+                    <option value="Mushroom, enoki, trimmed">
+                    <option value="Mushroom, oyster, fresh">
+                    <option value="Mushroom, shimeji">
+                    <option value="Mushroom, shimeji, trimmed">
+                    <option value="Mushroom, shitake, dried">
+                    <option value="Mushroom, shitake, dried, soaked">
+                    <option value="Mushroom, shitake, dried, soaked, trimmed">
+                    <option value="Mushroom, shitake, fresh">
+                    <option value="Mustard (French Classic), yellow">
+                    <option value="Mustard (Grey Poupon), dijon">
+                    <option value="Mustard (Heinz), yellow">
+                    <option value="Nata de coco (Pro Possmei), white">
+                    <option value="Nata de coco (Pro Possmei), white, drained">
+                    <option value="Noodles (Fat & Thin), rice, 10mm">
+                    <option value="Noodles (Fat & Thin), rice, 10mm, soaked">
+                    <option value="Noodles (Mama), rice, 3mm">
+                    <option value="Noodles (Mama), rice, 3mm, soaked">
+                    <option value="Noodles (Ottogi), glass">
+                    <option value="Noodles, thick">
+                    <option value="Noodles, egg">
+                    <option value="Nori (Ozaki)">
+                    <option value="Nutmeg (McCormick)">
+                    <option value="Octopus (MIda), flower">
+                    <option value="Oil (Dona Elena), olive">
+                    <option value="Oil (Filippo Berio), olive, extra virgin">
+                    <option value="Oil (Lee Kum Kee), sesame">
+                    <option value="Oil (Marcaleon), canola">
+                    <option value="Oil (Royal Ace), canola">
+                    <option value="Oil (Jolly), canola">
+                    <option value="Oil, palm">
+                    <option value="Onion, red">
+                    <option value="Onion, red, trimmed">
+                    <option value="Onion, red, trimmed, fried">
+                    <option value="Onion, white">
+                    <option value="Onion, white, trimmed">
+                    <option value="Onion, white, trimmed 1/2">
+                    <option value="Orange (Sunbest), mandarin">
+                    <option value="Orange (Sunbest), mandarin, drained">
+                    <option value="Oregano">
+                    <option value="Oregano, trimmed">
+                    <option value="Oregano (McCormick), leaves, whole">
+                    <option value="Oxtail, trimmed">
+                    <option value="Oyster sauce (Lee Kum Kee)">
+                    <option value="Pandan leaves">
+                    <option value="Pandan leaves, trimmed">
+                    <option value="Papaya, green">
+                    <option value="Papaya, green, trimmed">
+                    <option value="Paprika (Chiquilin), smoked">
+                    <option value="Paprika (McCormick), smoked">
+                    <option value="Paprika (McCormick), spanish">
+                    <option value="Parsely">
+                    <option value="Parsley, trimmed">
+                    <option value="Parsely (McCormick), flakes">
+                    <option value="Pasta (Barilla), spaghettoni">
+                    <option value="Pea, green">
+                    <option value="Peanut butter (Skippy), super chunk">
+                    <option value="Peanut butter (Skippy), creamy">
+                    <option value="Peanuts, skinless">
+                    <option value="Peanuts, skinless, fried">
+                    <option value="Pepper (Assad), sichuan, whole">
+                    <option value="Pepper (McCormick), black, ground">
+                    <option value="Pepper (McCormick), white, ground">
+                    <option value="Pepper, black, whole">
+                    <option value="Pepper, black, whole, ground">
+                    <option value="Peppermill (McCormick), black, grind">
+                    <option value="Pepperoni (Primo), sliced">
+                    <option value="Pepperoni (Aguila), smoked">
+                    <option value="Pickled mustard greens">
+                    <option value="Pineapple (Del Monte), sliced">
+                    <option value="Pineapple (Del Monte), sliced, drained">
+                    <option value="Pineapple (Jolly), chunks">
+                    <option value="Pineapple (Jolly), chunks, drained">
+                    <option value="Pineapple juice (Del Monte)">
+                    <option value="Plastic bottle (Penguin), 1L">
+                    <option value="Plastic bottle (Penguin), 500mL">
+                    <option value="Plastic bottle, PET, 500mL">
+                    <option value="Pomelo, peeled">
+                    <option value="Pomelo, trimmed">
+                    <option value="Pork belly, boneless, skinless">
+                    <option value="Pork chicharon (Daboy)">
+                    <option value="Pork chop">
+                    <option value="Pork chop, trimmed">
+                    <option value="Pork chop, boneless, skinless">
+                    <option value="Pork cubes (Knorr)">
+                    <option value="Pork floss (Shin Ton Yon)">
+                    <option value="Pork kasim">
+                    <option value="Pork mushroom ball">
+                    <option value="Pork, fats">
+                    <option value="Pork, ground">
+                    <option value="Pork fat, ground">
+                    <option value="Pork mince with bean paste (Gulong)">
+                    <option value="Potato">
+                    <option value="Potato, trimmed">
+                    <option value="Potato, sweet">
+                    <option value="Potato, sweet, trimmed">
+                    <option value="Potato, sweet, trimmed, boiled">
+                    <option value="Potato (Knorr), flakes">
+                    <option value="Potato bun (28 Derby)">
+                    <option value="Potato chips (Lays), classic">
+                    <option value="Quinoa">
+                    <option value="Raddish, white">
+                    <option value="Raddish, white, trimmed">
+                    <option value="Radish, red">
+                    <option value="Radish, red, trimmed">
+                    <option value="Red chili paste (Maepranom)">
+                    <option value="Red curry paste (Pantai)">
+                    <option value="Red curry powder (McCormick)">
+                    <option value="Rice (China Grown), japanese">
+                    <option value="Rice (Harvester), sticky">
+                    <option value="Rice (Martha), jasmine">
+                    <option value="Rice crispies (Brown Slot)">
+                    <option value="Rice paper (Fat & Thin)">
+                    <option value="Roasted sesame dressing (Kewpie)">
+                    <option value="Mang tomas">
+                    <option value="Safe seasoning">
+                    <option value="Salami (Citterio)">
+                    <option value="Salmon (Mida), fillet">
+                    <option value="Salmon (Ora King), fillet">
+                    <option value="Salmon (Ora King), fillet, trimmed">
+                    <option value="Salmon (Salar), fillet">
+                    <option value="Salmon (Salar), fillet, trimmed">
+                    <option value="Salt, iodized">
+                    <option value="Salt, kosher">
+                    <option value="Salt, rock">
+                    <option value="Salted egg (Hengs), powder">
+                    <option value="Salted egg (Knorr), powder">
+                    <option value="Scallop, local, no shell">
+                    <option value="Scallop, local, no shell, baked">
+                    <option value="Sea salt (Cornish), flakes">
+                    <option value="Seasoning (McCormick), Italian">
+                    <option value="Seasoning (McCormick), lemon & pepper">
+                    <option value="Sesame seeds, black">
+                    <option value="Sesame seeds, white">
+                    <option value="Shrimp">
+                    <option value="Shrimp, peeled">
+                    <option value="Shrimp skin, byproduct">
+                    <option value="Shrimp, dried">
+                    <option value="Shrimp (Vannamei), peeled, tail off">
+                    <option value="Shrimp (Vannamei), peeled, tail off, thawed">
+                    <option value="Shrimp (Vannamei), peeled, tail off, thawed, pc">
+                    <option value="Shrimp and chicken stock">
+                    <option value="Shrimp cubes (Knorr)">
+                    <option value="Sichuan chili, dried">
+                    <option value="Sigarilyas">
+                    <option value="Sigarilyas, trimmed">
+                    <option value="Singkamas">
+                    <option value="Singkamas, peeled">
+                    <option value="Sinigang mix (Knorr), original">
+                    <option value="Sitaw">
+                    <option value="Sitaw, trimmed">
+                    <option value="Sodium citrate (Kemrad)">
+                    <option value="Soup stock (WR)">
+                    <option value="Sourcream (Emborg)">
+                    <option value="Sourdough (28 Derby), whole">
+                    <option value="Sourdough (28 Derby), sliced 1/12">
+                    <option value="Soy sauce (Datu Puti)">
+                    <option value="Soy sauce (Kikkoman)">
+                    <option value="Soy sauce (Lee kum kee), light">
+                    <option value="Spicy seasoning">
+                    <option value="Spring onions">
+                    <option value="Spring onions, trimmed">
+                    <option value="Squid (Mida), baby">
+                    <option value="Squid (Mida), baby, drained">
+                    <option value="Squid (Mida), baby, drained, seared">
+                    <option value="Squid (Navotas), whole">
+                    <option value="Squid (Navotas), whole, trimmed">
+                    <option value="Squid, baby, 20-25">
+                    <option value="Squid, tube, whole">
+                    <option value="Star anise">
+                    <option value="Starch (Cream), corn">
+                    <option value="Starch (Fat n Thin), potato">
+                    <option value="Starch, sweet potato">
+                    <option value="Sticker, cold brew">
+                    <option value="Sticker, iced tea">
+                    <option value="Sugar, brown">
+                    <option value="Sugar, palm, local">
+                    <option value="Sugar, washed">
+                    <option value="Sugar, white">
+                    <option value="Sugar, powdered">
+                    <option value="Sugar (Peotraca), powdered">
+                    <option value="Sweet chilli sauce (Dee Thai)">
+                    <option value="Sweet chili sauce (Pantai)">
+                    <option value="Sweet potato">
+                    <option value="Sweet potato, trimmed">
+                    <option value="Sweet potato, trimmed, cooked">
+                    <option value="Swordfish, belly">
+                    <option value="Syrup (Cems Superior), imitation honey">
+                    <option value="Syrup (Ghirardelli), chocolate">
+                    <option value="Syrup (Peotraco), corn">
+                    <option value="Tamarind paste (Pantai)">
+                    <option value="Tapioca (Polar Bear), small">
+                    <option value="Tendon, trimmed">
+                    <option value="Thai chili (Maepranom), crushed">
+                    <option value="Thai chili paste (Maepranom)">
+                    <option value="Thai tea mix (Cha Tra Mue)">
+                    <option value="Thyme">
+                    <option value="Tobiko (Ozaki)">
+                    <option value="Tofu">
+                    <option value="Tofu, fried">
+                    <option value="Tofu, croutons">
+                    <option value="Togarashi (S&B)">
+                    <option value="Tomato">
+                    <option value="Tomato, trimmed">
+                    <option value="Tomato, baguio">
+                    <option value="Tomato (Molinera), canned, crushed">
+                    <option value="Tomato paste (Del Monte)">
+                    <option value="Tomato sauce (Del Monte), original">
+                    <option value="Tomato, cherry">
+                    <option value="Tonkatsu sauce (Bulldog)">
+                    <option value="Tteok (Jongga)">
+                    <option value="Tuna (D&L)">
+                    <option value="Tuna (Mida)">
+                    <option value="Turmeric powder (McCormick)">
+                    <option value="Vinegar (Capri), balsamic">
+                    <option value="Vinegar (Del Monte), cane">
+                    <option value="Vinegar (Datu Puti), white">
+                    <option value="Vinegar (Mizkan), rice">
+                    <option value="Vinegar (Sarsons), malt">
+                    <option value="Vodka (Toska)">
+                    <option value="Wakame, dried">
+                    <option value="Wakame, dried, soaked">
+                    <option value="Walnuts">
+                    <option value="Water">
+                    <option value="Watermelon">
+                    <option value="Watermelon, trimmed">
+                    <option value="Whipping cream (Anchor)">
+                    <option value="Wine (Dona Elena), white">
+                    <option value="White bread (Thehusbun Inc)">
+                    <option value="Worcestershire sauce (Lea & Perrins)">
+                    <option value="Xanthan gum (Red Mill)">
+                    <option value="Yeast extract powder (Indofine)">
+                    <option value="Cake (Scratch), olive oil, half">
+                    <option value="Cake (Scratch), olive oil, sliced 1/16">
+                    <option value="Chives flakes (Infodine)">
+                    <option value="Cheese (Santini), parmesan, powder">
+                    <option value="Garlic powder (Indofine)">
+                    <option value="Ginger powder (Indofine)">
+                    <option value="Lemon & pepper seasoning (McCormick)">
+                    <option value="Onion powder (Indofine)">
+                    <option value="Oyster powder (Indofine)">
+                    <option value="Rice vinegar powder (Indofine)">
+                    <option value="Soy sauce powder (Indofine)">
+                    <option value="Oregano powder (McCormick)">
+                    <option value="Sea salt (Beksul)">
+                    <option value="Nori (Ifuki), sheet">
+                    <option value="Red pepper powder (Dae Joo)">
+                    <option value="Double IPA">
+                    <option value="SMB Apple">
+                    <option value="SMB Light">
+                    <option value="SMB Pale">
+                    <option value="Softdrink (Coca Cola), regular">
+                    <option value="Softdrink (Coca Cola), royal">
+                    <option value="Softdrink (Coca Cola), sprite">
+                    <option value="Softdrink (Coca Cola), sprite, kg">
+                    <option value="Softdrink (Coca Cola), zero">
+                    <option value="Water (Wilkins), mineral">
+                    <option value="Water (Hope), mineral">
+                    <option value="Flour (Pilmico), hard wheat">
+                    <option value="Starch, corn">
+                    <option value="Thai tea (500ml)">
+                    <option value="Corn, fresh, cooked">
+                    <option value="Corn, fresh">
+                    <option value="Corn, fresh, shredded, cooked">
+                    <option value="Mango popping boba">
+                    <option value="Soalheiro Allo 2023, Alvarinho & Loureiro, Portugal">
+                    <option value="Beaumont 2023, Chenin Blanc, South Africa">
+                    <option value="Jose Antonio Garcia 2022, Godello & Dona Blanca, Spain">
+                    <option value="Force Celeste 2024, Cinsault, South Africa">
+                    <option value="Chicken CLQ, brined (pack)">
+                    <option value="Dirty rice (batch)">
+                    <option value="Kimchi bacon rice (batch)">
+                    <option value="Umami paste (batch)">
+                    <option value="Tahini sauce (batch)">
+                    <option value="Tonkotsu tare (batch)">
+                    <option value="Tantanmen tare (batch)">
+                    <option value="Tonkotsu broth (batch)">
+                    <option value="Tantanmen broth (batch)">
+                    <option value="Hush puppy batter (batch)">
+                    <option value="Corn & cream cheese (batch)">
+                    <option value="Mozzarella kimchi tots (batch)">
+                    <option value="Bechamel (batch)">
+                    <option value="Ranch dressing (batch)">
+                    <option value="Sesame dressing (batch)">
+                    <option value="Kuchay oil (batch)">
+                    <option value="Mustard BBQ sauce (batch)">
+                    <option value="Dashi soy sauce (batch)">
+                    <option value="Demi glace sauce (batch)">
+                    <option value="Curry sauce (batch)">
+                    <option value="Gochujang oil (batch)">
+                    <option value="Sesame vinegar dressing (batch)">
+                    <option value="Hamburg (batch)">
+                    <option value="Beef belly mushroom (batch)">
+                    <option value="Mushroom oil (batch)">
+                    <option value="Umami fried chicken CLQ (pc)">
+                    <option value="Boneless umami fried chicken (pc)">
+                    <option value="Beef, shortplate, marinated (batch)">
+                    <option value="Tamago (batch)">
+                    <option value="Tamago syrup (batch)">
+                    <option value="Spicy mayo (batch)">
+                    <option value="Spicy salmon (batch)">
+                    <option value="Tofu croutons (batch)">
+                    <option value="Spring onion sesame (batch)">
+                    <option value="Onion salad (batch)">
+                    <option value="Pickled daikon (batch)">
+                    <option value="Fried onions, white (batch)">
+                    <option value="Tahini paste (batch)">
+                    <option value="Tahini base (batch)">
+                    <option value="Mushroom cream (batch)">
+                    <option value="Browned mushroom (batch)">
+                    <option value="Fried enoki (batch)">
+                    <option value="Lemon butter (batch)">
+                    <option value="Cabbage stir-fry (batch)">
+                    <option value="Brown sugar syrup (batch)">
+                    <option value="Crispy glazed dulong (batch)">
+                    <option value="Tantanmen dry noodle sauce (batch)">
+                    <option value="Tofu croutons (batch)">
+                    <option value="Coleslaw (serving)">
+                    <option value="Szechuan chili oil (batch)">
+                    <option value="Garlic butter (batch)">
+                    <option value="Parsley garlic (batch)">
+                    <option value="Fries powder (batch)">
+                    <option value="White russian dressing (batch)">
+                    <option value="Pickled onion, byproduct (batch)">
+                    <option value="Fowlbread burger sauce (batch)">
+                    <option value="Pickles breading (batch)">
+                    <option value="Seasoning (batch)">
+                    <option value="Green beans, cooked (batch)">
+                    <option value="Garlic green beans (batch)">
+                    <option value="Sweet chili sauce (batch)">
+                    <option value="Mushroom soup base (batch)">
+                    <option value="Salsa (batch)">
+                    <option value="Salsa mix (batch)">
+                    <option value="Dan dan tare (batch)">
+                    <option value="Buffalo mayo (batch)">
+                    <option value="Garlic breadcrumbs (batch)">
+                    <option value="Adobo mang tomas (batch)">
+                    <option value="Adobo sauce (batch)">
+                    <option value="Garlic oil (batch)">
+                    <option value="Red oil (batch)">
+                    <option value="Thousand island sauce (batch)">
+                    <option value="Chicken tofu sisig (batch)">
+                    <option value="Crispy squid (batch)">
+                    <option value="Wet batter (batch)">
+                    <option value="Mushroom cream sauce (batch)">
+                    <option value="Cheese mix (batch)">
+                    <option value="Banana Q (batch)">
+                    <option value="Seared onion (batch)">
+                    <option value="Salted butter corn (batch)">
+                    <option value="Porkchop, brined (batch)">
+                    <option value="Tortang talong (batch)">
+                    <option value="Porkchop, brined, cooked (pc)">
+                    <option value="Tofu, brined, cooked (pc)">
+                    <option value="Tofu skin, fried (pc)">
+                    <option value="Chicken skin (pc)">
+                    <option value="Crispy chicken (batch)">
+                    <option value="Seared pork belly (batch)">
+                    <option value="Breaded pickles (batch)">
+                    <option value="Pickling liquid (batch)">
+                    <option value="Lapu-lapu fillet, brined (batch)">
+                    <option value="Mustard lemon dressing (batch)">
+                    <option value="Dried scallop oil (batch)">
+                    <option value="Seasoned breadcrumbs (batch)">
+                    <option value="Dill oil (batch)">
+                    <option value="Black garlic oil (batch)">
+                    <option value="Coconut sauce (batch)">
+                    <option value="Aioli sauce (Batch)">
+                    <option value="Romesco sauce (batch)">
+                    <option value="Tartar sauce (batch)">
+                    <option value="Burger sauce (batch)">
+                    <option value="Green chili sauce (batch)">
+                    <option value="Scallop salad dressing (batch)">
+                    <option value="Caramel sauce (batch)">
+                    <option value="French toast milk (batch)">
+                    <option value="Octopus, boiled (batch)">
+                    <option value="Ramen broth (batch)">
+                    <option value="Salted egg cream (batch)">
+                    <option value="Aligue butter (batch)">
+                    <option value="Cauliflower pesto (batch)">
+                    <option value="Bisque base (batch)">
+                    <option value="Bisque sauce (batch)">
+                    <option value="Lemon butter (batch)">
+                    <option value="Chorizo bolognese (batch)">
+                    <option value="Garlic confit (batch)">
+                    <option value="Garlic rice, cooked (batch)">
+                    <option value="Mushroom cream (batch)">
+                    <option value="Bechamel (batch)">
+                    <option value="Salmon potato soup (batch)">
+                    <option value="Pickled red onion (batch)">
+                    <option value="Pickled green chili (batch)">
+                    <option value="Corn puree (batch)">
+                    <option value="Chopped pickles mix (batch)">
+                    <option value="Pineapple salsa (batch)">
+                    <option value="Brined cherry tomato (batch)">
+                    <option value="Ginger parsley oil (batch)">
+                    <option value="Sinigang base (batch)">
+                    <option value="Fish nuggets (batch)">
+                    <option value="Sauteed mushroom (batch)">
+                    <option value="Braised shortplate (batch)">
+                    <option value="Chimichurri (batch)">
+                    <option value="Mashed potato (batch)">
+                    <option value="Red garlic oil (batch)">
+                    <option value="Pork binagoongan, chopped (batch)">
+                    <option value="Porkchop breading mix (batch)">
+                    <option value="Porkchop, marinated (batch)">
+                    <option value="Porkchop, marinate sauce (batch)">
+                    <option value="Porkchop, cooked (pc)">
+                    <option value="Curry base sauce (batch)">
+                    <option value="Crab paste (batch)">
+                    <option value="Braised monggo (batch)">
+                    <option value="Pomelo salad dressing (batch)">
+                    <option value="Green chili bagoong mayo dressing (batch)">
+                    <option value="Sushi rice seasoning (batch)">
+                    <option value="Crispy rice (batch)">
+                    <option value="Flowerboy salad (batch)">
+                    <option value="Bagoong mix (batch)">
+                    <option value="Tom yum broth (batch)">
+                    <option value="Beef broth (batch)">
+                    <option value="Beef brisket, trimmed, braised (batch)">
+                    <option value="Oxtail, trimmed, for broth (batch)">
+                    <option value="Tendon, trimmed, braised (batch)">
+                    <option value="Pad thai sauce (batch)">
+                    <option value="Double calamari (batch)">
+                    <option value="Green chili sauce (batch)">
+                    <option value="Fried onions (batch)">
+                    <option value="Leek basil oil (batch)">
+                    <option value="Annatto oil (batch)">
+                    <option value="Crispy chicken skin (batch)">
+                    <option value="Fried basil (batch)">
+                    <option value="Sticky rice, cooked (batch)">
+                    <option value="Sweetened coconut milk (batch)">
+                    <option value="Coconut custard (batch)">
+                    <option value="Pork binagoongan, chopped (batch)">
+                    <option value="Gising gising sauce (batch)">
+                    <option value="Lemongrass paste base (batch)">
+                    <option value="Thai lime calamari seasoning powder (batch)">
+                    <option value="Kare-kare trail mix (batch)">
+                    <option value="Aligue paste (batch)">
+                    <option value="Alamang crunch (batch)">
+                    <option value="Shrimp & Chicken Stock (batch)">
+                    <option value="Egg starch breading mix (batch)">
+                    <option value="Cornstarch breading mix (batch)">
+                    <option value="Japanese rice, cooked (batch)">
+                    <option value="Jasmine rice, cooked (batch)">
+                    <option value="Spaghettoni (Barilla), cooked (batch)">
+                    <option value="Brine mix (batch)">
+                    <option value="Lapu-lapu, brined (batch)">
+                    <option value="Salmon, fillet, brined (batch)">
+                    <option value="Cobbler, fillet, brined, trimmed (batch)">
+                    <option value="Shrimp, peeled, brined (batch)">
+                    <option value="Shrimp, peeled, brined, pc (batch)">
+                    <option value="Prawns, brined (batch)">
+                    <option value="Prawns, brined, pc (batch)">
+                    <option value="Squid, brined (batch)">
+                    <option value="Chicken CLQ, brined (batch)">
+                    <option value="Chicken thigh, boneless, brined (batch)">
+                    <option value="Chicken breast, fillet, brined (batch)">
+                    <option value="Chicken breast, fillet, brined, pc">
+                    <option value="Ground beef (batch)">
+                    <option value="Burger seasoning (batch)">
+                    <option value="Pickles, bread and butter (batch)">
+                    <option value="Mashed potato prep (batch)">
+                    <option value="Black tea base (batch)">
+                    <option value="Green tea base (batch)">
+                    <option value="Sweetened black tea (batch)">
+                    <option value="Sweetened green tea (batch)">
+                    <option value="Orange yuzu iced tea (batch)">
+                    <option value="Calamansi iced tea (batch)">
+                    <option value="Thai tea base (batch)">
+                    <option value="Cold brew (batch)">
+                    <option value="Mixed milk (batch)">
+                    <option value="Simple syrup (batch)">
+                    <option value="Gochujang hot sauce (batch)">
+                    <option value="Spaghetti sauce (batch)">
+                    <option value="Breading mix, wet (batch)">
+                    <option value="Breading mix, dry (batch)">
+                    <option value="Safe seasoning (batch)">
+                    <option value="Spicy seasoning (batch)">
+                    <option value="Banana donuts (batch)">
+                    <option value="Chocolate sauce (batch)">
+                    <option value="Sticky rice (batch)">
+                    <option value="Ricotta cheese (batch)">
+                    <option value="Bagoong lime sauce (batch)">
+                    <option value="Bagoong glaze (batch)">
+                    <option value="Peanut sauce (batch)">
+                    <option value="Pork belly, dry brine (batch)">
+                    <option value="Dry fry batter (batch)">
+                    <option value="Wet fry batter (batch)">
+                    <option value="Fried onions, red (batch)">
+                    <option value="Baby squid, brined (batch)">
+                    <option value="Mushroom paste (batch)">
+                    <option value="Crispy onions (batch)">
+                    <option value="Bistek, braised, cooked (batch)">
+                    <option value="Brined top blade steak (batch)">
+                    <option value="Fried dulong (batch)">
+                    <option value="Chicken CLQ, dry brine (batch)">
+                    <option value="Chicken batter mix (batch)">
+                    <option value="Mushroom gravy (batch)">
+                    <option value="Caesar dressing (batch)">
+                    <option value="Tofu, brined (batch)">
+                    <option value="Corn & Cream Cheese">
+                    <option value="Hush Puppies">
+                    <option value="Eggplant Takoyaki">
+                    <option value="Mozzarella Kimchi Tots">
+                    <option value="Enoki Beef Rolls">
+                    <option value="Bechamel Tteok">
+                    <option value="Umami Chicken Skin">
+                    <option value="BB Fresh Corn Salad">
+                    <option value="Spicy Salmon">
+                    <option value="Single Umami Fried Chicken Set">
+                    <option value="Double Umami Fried Chicken Set">
+                    <option value="Boneless Fried Chicken Set">
+                    <option value="Hamburgreat Set">
+                    <option value="Garlic Mushroom Beef Set">
+                    <option value="Pan-grilled Salmon Set">
+                    <option value="Lemon Butter Chicken Steak Set">
+                    <option value="The Very Bad Set (1pc Chicken + Hamburgreat) Set">
+                    <option value="Upgrade: Iced Tea">
+                    <option value="Upgrade: Dirty Rice (cup)">
+                    <option value="Upgrade: Kimchi Bacon Rice (cup)">
+                    <option value="Upgrade: Mango Throne">
+                    <option value="Hamburgreat Curry Rice">
+                    <option value="Boneless Fried Chicken Curry Rice">
+                    <option value="Garlic Mushroom Beef Curry Rice">
+                    <option value="Tonkotsu Ramen">
+                    <option value="Tantanmen Ramen">
+                    <option value="Tantanmen Dry Noodles">
+                    <option value="Mushroom Cream Noodles">
+                    <option value="Lemon Garlic Parm Noodles">
+                    <option value="Add: Boneless Fried Chicken">
+                    <option value="Add: Hamburgreat">
+                    <option value="Dirty Rice">
+                    <option value="Dirty Rice (Cup)">
+                    <option value="Kimchi Bacon Rice">
+                    <option value="Kimchi Bacon Rice (cup)">
+                    <option value="Steamed Rice">
+                    <option value="Umami Fried Chicken (4pc)">
+                    <option value="Umami Fried Chicken (4pc + Hush Puppies)">
+                    <option value="Pan-grilled Salmon (ala carte)">
+                    <option value="Garlic Mushroom Beef (ala carte)">
+                    <option value="Boneless Fried Chicken (ala carte)">
+                    <option value="Lemon Butter Chicken Steak (ala carte)">
+                    <option value="Umami Fried Chicken Thigh (pc)">
+                    <option value="Umami Fried Chicken Leg (pc)">
+                    <option value="Kimchi (ala carte)">
+                    <option value="Tonkotsu Broth">
+                    <option value="Tantanmen Broth">
+                    <option value="The Very Bad Bundle">
+                    <option value="Upgrade: Iced Tea for 2">
+                    <option value="Upgrade: Dirty Rice for 2">
+                    <option value="Upgrade: Kimchi Bacon Rice for 2">
+                    <option value="Pinoy Spaghetti">
+                    <option value="Mango Throne">
+                    <option value="Banana Donuts">
+                    <option value="Penguin Mango Shake">
+                    <option value="Jasmine Tea (1L)">
+                    <option value="Orange Yuzu Iced Tea (1L)">
+                    <option value="Calamansi Iced Tea (1L)">
+                    <option value="Thai Tea (1L)">
+                    <option value="Cold Brew Black (1L)">
+                    <option value="Cold Brew Gentle Sugar (1L)">
+                    <option value="Cold Brew Chocolate (1L)">
+                    <option value="Cold Brew Mocha (1L)">
+                    <option value="Cold Brew Tea (1L)">
+                    <option value="Cold Brew Latte (1L)">
+                    <option value="Cold Brew Milk Tea (1L)">
+                    <option value="Jasmine Tea (500mL)">
+                    <option value="Orange Yuzu Iced Tea (500mL)">
+                    <option value="Calamansi Iced Tea (500mL)">
+                    <option value="Thai Tea (500mL)">
+                    <option value="Jasmine Tea">
+                    <option value="Orange Yuzu Iced Tea">
+                    <option value="Calamansi Iced Tea">
+                    <option value="Thai Tea">
+                    <option value="Cold Brew">
+                    <option value="Cold Brew Gentle Sugar">
+                    <option value="Cold Brew Tea">
+                    <option value="Cold Brew Chocolate">
+                    <option value="Cold Brew Mocha">
+                    <option value="Cold Brew Latte">
+                    <option value="Cold Brew Milk Tea">
+                </datalist>
+              </td>
+              <td><input type="number" class="form-control text-end" name="qty" onchange="Calc(this);" onkeydown="moveFocus(event)" step="0.01"></td>
+              <td><input type="number" class="form-control text-end" name="rate" onchange="Calc(this);" onkeydown="moveFocus(event)" step="0.01"></td>
+              <td><input type="number" class="form-control text-end" name="amt" value="0" step="0.01" readonly></td>
+              <td>
+                <select class="form-control" name="expenseType">
+                  <option value="">Select</option>
+                  <option value="Base Food">Base Food</option>
+                  <option value="Cooking Oil">Cooking Oil</option>
+                  <option value="Delivery Charges">Delivery Charges</option>
+                  <option value="Store Inventory">Store Inventory</option>
+                  <option value="Base Beverage">Base Beverage</option>
+                  <option value="Ice">Ice</option>
+                  <option value="Packaging Cost">Packaging Cost</option>
+                  <option value="Cleaning Supplies">Cleaning Supplies</option>
+                  <option value="Office Supplies">Office Supplies</option>
+                  <option value="Kitchen Supplies">Kitchen Supplies</option>
+                  <option value="Other Supplies">Other Supplies</option>
+                  <option value="Smallware">Smallware</option>
+                  <option value="Small Tools & Equipment">Small Tools & Equipment</option>
+                  <option value="Marketing Fee">Marketing Fee</option>
+                  <option value="Facebook Ads">Facebook Ads</option>
+                  <option value="Production & Printing">Production & Printing</option>
+                  <option value="Other Marketing">Other Marketing</option>
+                  <option value="Fixed Rent">Fixed Rent</option>
+                  <option value="Percentage Rent">Percentage Rent</option>
+                  <option value="CUSA">CUSA</option>
+                  <option value="Al Fresco Rent">Al Fresco Rent</option>
+                  <option value="Storage Rent">Storage Rent</option>
+                  <option value="Electricity">Electricity</option>
+                  <option value="Water">Water</option>
+                  <option value="Airconditioning">Airconditioning</option>
+                  <option value="Internet/Telephone">Internet/Telephone</option>
+                  <option value="LPG">LPG</option>
+                  <option value="HVAC">HVAC</option>
+                  <option value="Construction & Furniture">Construction & Furniture</option>
+                  <option value="Kitchen Equipment">Kitchen Equipment</option>
+                  <option value="Pest Control">Pest Control</option>
+                  <option value="R&D Expenses">R&D Expenses</option>
+                  <option value="Communication">Communication</option>
+                  <option value="Transportation">Transportation</option>
+                  <option value="Bacteriological Test">Bacteriological Test</option>
+                  <option value="Other Expenses">Other Expenses</option>
+                  <option value="Management Fee (Lowbrow)">Management Fee (Lowbrow)</option>
+                  <option value="Accounting Fees">Accounting Fees</option>
+                  <option value="MGT Team Salaries + Allowances">MGT Team Salaries + Allowances</option>
+                  <option value="Direct Hires (1st Cutoff)">Direct Hires (1st Cutoff)</option>
+                  <option value="Direct Hires (2nd Cutoff)">Direct Hires (2nd Cutoff)</option>
+                  <option value="Healthcare Benefits (Maxicare)">Healthcare Benefits (Maxicare)</option>
+                  <option value="13th Month Pay">13th Month Pay</option>
+                  <option value="Other Salaries">Other Salaries</option>
+                  <option value="Service Charge">Service Charge</option>
+                  <option value="SSS Premium Expense">SSS Premium Expense</option>
+                  <option value="PHIC Premium Expense">PHIC Premium Expense</option>
+                  <option value="HDMF Premium Expense">HDMF Premium Expense</option>
+                  <option value="VAT Payables">VAT Payables</option>
+                  <option value="EWT Remittances">EWT Remittances</option>
+                  <option value="Income Tax Return">Income Tax Return</option>
+                  <option value="Permits & Licenses">Permits & Licenses</option>
+                  <option value="Asset Acquisitions">Asset Acquisitions</option>
+                  <option value="Other Non-Opex">Other Non-Opex</option>  
+        
+                  <!-- Other options remain the same -->
+                </select>
+              </td>
+              <td>
+                <select class="form-control" name="vatType" onkeydown="moveFocus(event)">
+                  <option value="">Select</option>
+                  <option value="V">Vat</option>
+                  <option value="N">Non</option>
+                </select>
+              </td>
+        
+        
+              <td>
+                <select class="form-control" name="ewt" onkeydown="moveFocus(event)">
+                  <option value="0%">0%</option>
+                  <option value="1%">1%</option>
+                  <option value="2%">2%</option>
+                  <option value="5%">5%</option>
+                </select>
+              </td>
+              <td class="NoPrint">
+                <button type="button" class="btn btn-sm btn-danger" onclick="BtnDel(this)">X</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+                  
+                  <div class="row">
+                    <div class="col-8">
+        
+        
+                      <button type="submit" class="btn btn-primary" >Submit</button>
+                    </div>
+                    <div class="col-4">
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">Total (Vat Incl)</span>
+                        <input type="number" class="form-control text-end" id="FTotal" name="FTotal" disabled>
+                      </div>
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">VAT Amount</span>
+                        <input type="number" class="form-control text-end" id="FGST" name="FGST" disabled>
+                      </div>
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">EWT Amount</span>
+                        <input type="number" class="form-control text-end" id="FEWT" name="FEWT" disabled>
+                      </div>
+                      <div class="input-group mb-3">
+                        <span class="input-group-text">Net Amount</span>
+                        <input type="number" class="form-control text-end" id="FNet" name="FNet" disabled>
+                      </div>
+                    </div>
+                   </form>
+                  </div>
+                  
+                  <script>
+                    // Function to move focus to the next input field when Enter is pressed
+                    function moveFocus(event) {
+                      if (event.key === "Enter") {
+                        let inputs = Array.from(event.target.closest('tr').querySelectorAll('input, select'));  // Get all inputs in the current row
+                        let index = inputs.indexOf(event.target);  // Find the index of the current input
+                        let nextIndex = index + 8;  // Find the next input field
+                        
+                        // If there is a next input field, focus on it
+                        if (nextIndex < inputs.length) {
+                          inputs[nextIndex].focus();
+                        } else {
+                          // If no next input, check for the next row (if any)
+                          let nextRow = event.target.closest('tr').nextElementSibling;
+                          if (nextRow) {
+                            let nextRowInputs = nextRow.querySelectorAll('input, select');
+                            nextRowInputs[0].focus();  // Focus on the first input in the next row
+                          }
+                        }
+                      }
+                    }
+                    </script>
+            <!-- Bootstrap Bundle JS -->
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4" crossorigin="anonymous"></script>
+          </body>
+            
+      </div>
+
+    </div>
+
+    <!-- Include Bootstrap JavaScript from a CDN -->
+    <script src="https://code.jquery.com/jquery-3.6.0.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.9.3/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.min.js"></script>
+    
+    <script>
+      // Toggle visibility of the expenses content
+      document.getElementById("expensesLink").addEventListener("click", function() {
+        var content = document.getElementById("expensesContent");
+        content.style.display = (content.style.display === "none" || content.style.display === "") ? "block" : "none";
+      });
+    </script>
+  </body>
+</html>
